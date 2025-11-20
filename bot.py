@@ -1,16 +1,13 @@
-import json
 import os
-import logging
+import json
 from dotenv import load_dotenv
-from telegram import KeyboardButton, ReplyKeyboardMarkup, Update
-from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, filters
+from telegram import Bot, ReplyKeyboardMarkup, KeyboardButton
+from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
 
 load_dotenv()
 TOKEN = os.getenv("BOT_TOKEN")
 if not TOKEN:
     raise RuntimeError("BOT_TOKEN not set")
-
-logging.basicConfig(level=logging.INFO)
 
 # Загружаем контент
 with open("content.json", "r", encoding="utf-8") as f:
@@ -45,51 +42,46 @@ def sections_keyboard():
     buttons.append(["Назад"])
     return ReplyKeyboardMarkup(buttons, resize_keyboard=True)
 
-
 # --- Хэндлеры ---
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(WELCOME_TEXT, reply_markup=main_keyboard())
+def start(update, context):
+    update.message.reply_text(WELCOME_TEXT, reply_markup=main_keyboard())
 
-async def choose_section(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Выберите раздел:", reply_markup=sections_keyboard())
+def choose_section(update, context):
+    update.message.reply_text("Выберите раздел:", reply_markup=sections_keyboard())
 
-async def buy(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(BUY_URL)
+def buy(update, context):
+    update.message.reply_text(BUY_URL)
 
-async def contact(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(CONTACT_URL)
+def contact(update, context):
+    update.message.reply_text(CONTACT_URL)
 
-async def help_msg(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Выберите раздел — и я покажу пример заполнения.")
+def help_msg(update, context):
+    update.message.reply_text("Выберите раздел — и я покажу пример заполнения.")
 
-async def back(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Главное меню:", reply_markup=main_keyboard())
+def back(update, context):
+    update.message.reply_text("Главное меню:", reply_markup=main_keyboard())
 
-async def show_section(update: Update, context: ContextTypes.DEFAULT_TYPE):
+def show_section(update, context):
     text = update.message.text
     section = next((s for s in SECTIONS if s["title"] == text), None)
     if not section:
         return
-
     if section["image"]:
-        await update.message.reply_photo(section["image"], caption=section["text"])
+        update.message.reply_photo(section["image"], caption=section["text"])
     else:
-        await update.message.reply_text(section["text"])
-
+        update.message.reply_text(section["text"])
 
 # --- Запуск ---
-def main():
-    app = ApplicationBuilder().token(TOKEN).build()
+updater = Updater(TOKEN, use_context=True)
+dp = updater.dispatcher
 
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(MessageHandler(filters.Text("Выбрать раздел"), choose_section))
-    app.add_handler(MessageHandler(filters.Text("Купить планер"), buy))
-    app.add_handler(MessageHandler(filters.Text("Связаться с автором"), contact))
-    app.add_handler(MessageHandler(filters.Text("Помощь"), help_msg))
-    app.add_handler(MessageHandler(filters.Text("Назад"), back))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, show_section))
+dp.add_handler(CommandHandler("start", start))
+dp.add_handler(MessageHandler(Filters.text("Выбрать раздел"), choose_section))
+dp.add_handler(MessageHandler(Filters.text("Купить планер"), buy))
+dp.add_handler(MessageHandler(Filters.text("Связаться с автором"), contact))
+dp.add_handler(MessageHandler(Filters.text("Помощь"), help_msg))
+dp.add_handler(MessageHandler(Filters.text("Назад"), back))
+dp.add_handler(MessageHandler(Filters.text & ~Filters.command, show_section))
 
-    app.run_polling()
-
-if __name__ == "__main__":
-    main()
+updater.start_polling()
+updater.idle()
