@@ -2,7 +2,7 @@ import json
 import os
 import logging
 from dotenv import load_dotenv
-from telegram import KeyboardButton, ReplyKeyboardMarkup
+from telegram import KeyboardButton, ReplyKeyboardMarkup, Update
 from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, filters
 
 load_dotenv()
