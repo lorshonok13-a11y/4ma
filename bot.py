@@ -42,9 +42,7 @@ def sections_keyboard():
             row = []
     if row:
         buttons.append(row)
-
     buttons.append(["Назад"])
-
     return ReplyKeyboardMarkup(buttons, resize_keyboard=True)
 
 
@@ -84,17 +82,12 @@ def main():
     app = ApplicationBuilder().token(TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
-
     app.add_handler(MessageHandler(filters.Text("Выбрать раздел"), choose_section))
     app.add_handler(MessageHandler(filters.Text("Купить планер"), buy))
     app.add_handler(MessageHandler(filters.Text("Связаться с автором"), contact))
     app.add_handler(MessageHandler(filters.Text("Помощь"), help_msg))
     app.add_handler(MessageHandler(filters.Text("Назад"), back))
-
-    app.add_handler(MessageHandler(
-        filters.TEXT & ~filters.COMMAND,
-        show_section
-    ))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, show_section))
 
     app.run_polling()
 
