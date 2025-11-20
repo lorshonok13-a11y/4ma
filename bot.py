@@ -1,6 +1,6 @@
 import json
 import os
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, InputMediaPhoto
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
@@ -22,11 +22,13 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     section_id = query.data
     section = next((s for s in CONTENT["sections"] if s["id"] == section_id), None)
+    
     if section:
         # Если есть несколько картинок
         if section.get("images"):
-            media = [InputMediaPhoto(media=url) for url in section["images"]]
-            await query.message.reply_media_group(media)
+            for img_url in section["images"]:
+                await query.message.reply_photo(img_url)
+            # текст после всех фото
             await query.message.reply_text(section["text"])
         # Если одно фото
         elif section.get("image"):
