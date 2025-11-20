@@ -1,9 +1,11 @@
-
 import json
-import logging
 import os
-from aiogram import Bot, Dispatcher, executor, types
-from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
+import logging
+from aiogram import Bot, Dispatcher, types, F
+from aiogram.filters import CommandStart
+from aiogram.types import (
+    ReplyKeyboardMarkup, KeyboardButton
+)
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -12,18 +14,21 @@ if not TOKEN:
     raise RuntimeError("BOT_TOKEN not set")
 
 logging.basicConfig(level=logging.INFO)
-bot = Bot(token=TOKEN)
-dp = Dispatcher(bot)
 
+bot = Bot(token=TOKEN)
+dp = Dispatcher()
+
+# Load content
 with open("content.json", "r", encoding="utf-8") as f:
     CONTENT = json.load(f)
 
 SECTIONS = CONTENT["sections"]
-BUY_URL = CONTENT.get("buy_url")
-CONTACT_URL = CONTENT.get("contact_url")
-WELCOME_TEXT = CONTENT.get("welcome_text")
+BUY_URL = CONTENT["buy_url"]
+CONTACT_URL = CONTENT["contact_url"]
+WELCOME_TEXT = CONTENT["welcome_text"]
 
-def build_menu_keyboard():
+# --- Keyboards ---
+def main_keyboard():
     kb = ReplyKeyboardMarkup(resize_keyboard=True)
     kb.add(KeyboardButton("Выбрать раздел"))
     kb.add(KeyboardButton("Купить планер"))
@@ -31,53 +36,70 @@ def build_menu_keyboard():
     kb.add(KeyboardButton("Помощь"))
     return kb
 
-def build_sections_keyboard():
+def sections_keyboard():
     kb = ReplyKeyboardMarkup(resize_keyboard=True)
-    row=[]
-    for i,s in enumerate(SECTIONS,1):
+    row = []
+    for i, s in enumerate(SECTIONS, 1):
         row.append(KeyboardButton(s["title"]))
-        if i%2==0:
-            kb.row(*row); row=[]
-    if row: kb.row(*row)
+        if i % 2 == 0:
+            kb.row(*row)
+            row = []
+    if row:
+        kb.row(*row)
     kb.add(KeyboardButton("Назад"))
     return kb
 
-@dp.message_handler(commands=["start"])
+
+# --- Handlers ---
+@dp.message(CommandStart())
 async def start(message: types.Message):
-    await message.answer(WELCOME_TEXT, reply_markup=build_menu_keyboard())
+    await message.answer(WELCOME_TEXT, reply_markup=main_keyboard())
 
-@dp.message_handler(lambda m: m.text=="Выбрать раздел")
-async def choose(message: types.Message):
-    await message.answer("Выберите раздел:", reply_markup=build_sections_keyboard())
 
-@dp.message_handler(lambda m: m.text=="Купить планер")
+@dp.message(F.text == "Выбрать раздел")
+async def choose_section(message: types.Message):
+    await message.answer("Выберите раздел:", reply_markup=sections_keyboard())
+
+
+@dp.message(F.text == "Купить планер")
 async def buy(message: types.Message):
     await message.answer(BUY_URL)
 
-@dp.message_handler(lambda m: m.text=="Связаться с автором")
+
+@dp.message(F.text == "Связаться с автором")
 async def contact(message: types.Message):
     await message.answer(CONTACT_URL)
 
-@dp.message_handler(lambda m: m.text=="Помощь")
-async def help(message: types.Message):
-    await message.answer("Выберите раздел и получите пример заполнения.")
 
-@dp.message_handler(lambda m: m.text=="Назад")
+@dp.message(F.text == "Помощь")
+async def help_message(message: types.Message):
+    await message.answer("Выберите раздел — и я покажу пример заполнения.")
+
+
+@dp.message(F.text == "Назад")
 async def back(message: types.Message):
-    await message.answer("Главное меню:", reply_markup=build_menu_keyboard())
+    await message.answer("Главное меню:", reply_markup=main_keyboard())
 
-@dp.message_handler(lambda m: any(m.text==s["title"] for s in SECTIONS))
-async def section(message: types.Message):
-    s = next(x for x in SECTIONS if x["title"]==message.text)
-    text = s["text"]
-    img = s["image"]
-    if img:
-        try:
-            await message.answer_photo(img, caption=text)
-            return
-        except:
-            pass
-    await message.answer(text)
 
-if __name__=="__main__":
-    executor.start_polling(dp, skip_updates=True)
+@dp.message(lambda msg: any(msg.text == s["title"] for s in SECTIONS))
+async def show_section(message: types.Message):
+    section = next(s for s in SECTIONS if s["title"] == message.text)
+    text = section["text"]
+    image = section["image"]
+
+    if image:
+        # If image path exists locally
+        if os.path.exists(image):
+            with open(image, "rb") as photo:
+                await message.answer_photo(photo, caption=text)
+        else:
+            # If image = URL (you can use this later)
+            await message.answer_photo(image, caption=text)
+    else:
+        await message.answer(text)
+
+
+# --- Launcher ---
+if __name__ == "__main__":
+    import asyncio
+    asyncio.run(dp.start_polling(bot))
