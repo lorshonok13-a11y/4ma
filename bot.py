@@ -1,13 +1,16 @@
-import os
 import json
+import os
+import logging
 from dotenv import load_dotenv
-from telegram import Bot, ReplyKeyboardMarkup, KeyboardButton
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
+from telegram import Update, KeyboardButton, ReplyKeyboardMarkup
+from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, filters
 
 load_dotenv()
 TOKEN = os.getenv("BOT_TOKEN")
 if not TOKEN:
     raise RuntimeError("BOT_TOKEN not set")
+
+logging.basicConfig(level=logging.INFO)
 
 # Загружаем контент
 with open("content.json", "r", encoding="utf-8") as f:
@@ -43,45 +46,56 @@ def sections_keyboard():
     return ReplyKeyboardMarkup(buttons, resize_keyboard=True)
 
 # --- Хэндлеры ---
-def start(update, context):
-    update.message.reply_text(WELCOME_TEXT, reply_markup=main_keyboard())
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(WELCOME_TEXT, reply_markup=main_keyboard())
 
-def choose_section(update, context):
-    update.message.reply_text("Выберите раздел:", reply_markup=sections_keyboard())
+async def choose_section(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("Выберите раздел:", reply_markup=sections_keyboard())
 
-def buy(update, context):
-    update.message.reply_text(BUY_URL)
+async def buy(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(BUY_URL)
 
-def contact(update, context):
-    update.message.reply_text(CONTACT_URL)
+async def contact(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(CONTACT_URL)
 
-def help_msg(update, context):
-    update.message.reply_text("Выберите раздел — и я покажу пример заполнения.")
+async def help_msg(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("Выберите раздел — и я покажу пример заполнения.")
 
-def back(update, context):
-    update.message.reply_text("Главное меню:", reply_markup=main_keyboard())
+async def back(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("Главное меню:", reply_markup=main_keyboard())
 
-def show_section(update, context):
+async def show_section(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
     section = next((s for s in SECTIONS if s["title"] == text), None)
     if not section:
         return
-    if section["image"]:
-        update.message.reply_photo(section["image"], caption=section["text"])
+
+    image_path = section.get("image")
+
+    if image_path:
+        # Если локальный файл
+        if os.path.exists(image_path):
+            with open(image_path, "rb") as photo_file:
+                await update.message.reply_photo(photo_file, caption=section["text"])
+        else:
+            # Если URL картинки
+            await update.message.reply_photo(image_path, caption=section["text"])
     else:
-        update.message.reply_text(section["text"])
+        await update.message.reply_text(section["text"])
 
 # --- Запуск ---
-updater = Updater(TOKEN, use_context=True)
-dp = updater.dispatcher
+def main():
+    app = ApplicationBuilder().token(TOKEN).build()
 
-dp.add_handler(CommandHandler("start", start))
-dp.add_handler(MessageHandler(Filters.text("Выбрать раздел"), choose_section))
-dp.add_handler(MessageHandler(Filters.text("Купить планер"), buy))
-dp.add_handler(MessageHandler(Filters.text("Связаться с автором"), contact))
-dp.add_handler(MessageHandler(Filters.text("Помощь"), help_msg))
-dp.add_handler(MessageHandler(Filters.text("Назад"), back))
-dp.add_handler(MessageHandler(Filters.text & ~Filters.command, show_section))
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(MessageHandler(filters.Text("Выбрать раздел"), choose_section))
+    app.add_handler(MessageHandler(filters.Text("Купить планер"), buy))
+    app.add_handler(MessageHandler(filters.Text("Связаться с автором"), contact))
+    app.add_handler(MessageHandler(filters.Text("Помощь"), help_msg))
+    app.add_handler(MessageHandler(filters.Text("Назад"), back))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, show_section))
 
-updater.start_polling()
-updater.idle()
+    app.run_polling()
+
+if __name__ == "__main__":
+    main()
