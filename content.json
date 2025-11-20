@@ -1,0 +1,19 @@
+{
+  "welcome_text": "Привет! Я помогу тебе научиться пользоваться твоим планером.\n\nИ помни: Меньше хаоса - больше тебя.",
+  "buy_url": "https://www.wildberries.ru/seller/250054698",
+  "contact_url": "https://t.me/AV_BelyaevaBuy",
+  "sections": [
+    {
+      "id": "important_events",
+      "title": "Важные события",
+      "image": null,
+      "text": "Совет по заполнению."
+    },
+    {
+      "id": "year_goals",
+      "title": "Цели на год",
+      "image": null,
+      "text": "Совет по целям."
+    }
+  ]
+}
