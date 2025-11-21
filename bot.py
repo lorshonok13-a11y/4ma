@@ -1,5 +1,6 @@
 import json
 import os
+import asyncio
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, InputMediaPhoto
 from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes
 
@@ -22,7 +23,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # Обработка нажатий кнопок
 async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    await query.answer()
+    await query.answer()  # подтверждаем callback
 
     section_id = query.data
     section = next((s for s in CONTENT["sections"] if s["id"] == section_id), None)
@@ -30,21 +31,28 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not section:
         return
 
+    chat_id = query.message.chat_id
     images = section.get("images")
+
     if images:
-        # Создаём альбом
+        # формируем альбом
         media = [InputMediaPhoto(url) for url in images]
         media[0].caption = section["text"]
 
-        # Отправляем альбом через context.bot.send_media_group
-        await context.bot.send_media_group(chat_id=query.message.chat_id, media=media)
-    elif section.get("image"):
-        await query.message.reply_photo(section["image"], caption=section["text"])
-    else:
-        await query.message.reply_text(section["text"])
+        # небольшая пауза перед отправкой альбома
+        await asyncio.sleep(0.2)
+        await context.bot.send_media_group(chat_id=chat_id, media=media)
 
-    # Отдельное сообщение с кнопками после раздела
-    await query.message.reply_text("Выберите раздел:", reply_markup=get_keyboard())
+    elif section.get("image"):
+        await asyncio.sleep(0.1)
+        await context.bot.send_photo(chat_id=chat_id, photo=section["image"], caption=section["text"])
+    else:
+        await asyncio.sleep(0.1)
+        await context.bot.send_message(chat_id=chat_id, text=section["text"])
+
+    # снова небольшая пауза перед отправкой меню
+    await asyncio.sleep(0.2)
+    await context.bot.send_message(chat_id=chat_id, text="Выберите раздел:", reply_markup=get_keyboard())
 
 # Создаём приложение
 app = ApplicationBuilder().token(BOT_TOKEN).build()
