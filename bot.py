@@ -1,63 +1,101 @@
 import json
 import os
-import asyncio
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, InputMediaPhoto
-from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes
+import logging
+from dotenv import load_dotenv
+from telegram import Update, KeyboardButton, ReplyKeyboardMarkup
+from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, filters
 
-BOT_TOKEN = os.getenv("BOT_TOKEN")
+load_dotenv()
+TOKEN = os.getenv("BOT_TOKEN")
+if not TOKEN:
+    raise RuntimeError("BOT_TOKEN not set")
+
+logging.basicConfig(level=logging.INFO)
 
 # Загружаем контент
 with open("content.json", "r", encoding="utf-8") as f:
     CONTENT = json.load(f)
 
-# Функция для создания клавиатуры с разделами
-def get_keyboard():
-    keyboard = [[InlineKeyboardButton(s["title"], callback_data=s["id"])] for s in CONTENT["sections"]]
-    return InlineKeyboardMarkup(keyboard)
+SECTIONS = CONTENT["sections"]
+BUY_URL = CONTENT["buy_url"]
+CONTACT_URL = CONTENT["contact_url"]
+WELCOME_TEXT = CONTENT["welcome_text"]
 
-# /start
+# --- Клавиатуры ---
+def main_keyboard():
+    return ReplyKeyboardMarkup(
+        [
+            ["Выбрать раздел"],
+            ["Купить планер", "Связаться с автором"],
+            ["Помощь"]
+        ],
+        resize_keyboard=True
+    )
+
+def sections_keyboard():
+    buttons = []
+    row = []
+    for i, sec in enumerate(SECTIONS, 1):
+        row.append(sec["title"])
+        if i % 2 == 0:
+            buttons.append(row)
+            row = []
+    if row:
+        buttons.append(row)
+    buttons.append(["Назад"])
+    return ReplyKeyboardMarkup(buttons, resize_keyboard=True)
+
+# --- Хэндлеры ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    welcome_text = CONTENT["welcome_text"]
-    await update.message.reply_text(welcome_text, reply_markup=get_keyboard())
+    await update.message.reply_text(WELCOME_TEXT, reply_markup=main_keyboard())
 
-# Обработка нажатий кнопок
-async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()  # подтверждаем callback
+async def choose_section(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("Выберите раздел:", reply_markup=sections_keyboard())
 
-    section_id = query.data
-    section = next((s for s in CONTENT["sections"] if s["id"] == section_id), None)
+async def buy(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(BUY_URL)
 
+async def contact(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(CONTACT_URL)
+
+async def help_msg(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("Выберите раздел — и я покажу пример заполнения.")
+
+async def back(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("Главное меню:", reply_markup=main_keyboard())
+
+async def show_section(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = update.message.text
+    section = next((s for s in SECTIONS if s["title"] == text), None)
     if not section:
         return
 
-    chat_id = query.message.chat_id
-    images = section.get("images")
+    image_path = section.get("image")
 
-    if images:
-        # формируем альбом
-        media = [InputMediaPhoto(url) for url in images]
-        media[0].caption = section["text"]
-
-        # небольшая пауза перед отправкой альбома
-        await asyncio.sleep(0.2)
-        await context.bot.send_media_group(chat_id=chat_id, media=media)
-
-    elif section.get("image"):
-        await asyncio.sleep(0.1)
-        await context.bot.send_photo(chat_id=chat_id, photo=section["image"], caption=section["text"])
+    if image_path:
+        # Если локальный файл
+        if os.path.exists(image_path):
+            with open(image_path, "rb") as photo_file:
+                await update.message.reply_photo(photo_file, caption=section["text"])
+        else:
+            # Если URL картинки
+            await update.message.reply_photo(image_path, caption=section["text"])
     else:
-        await asyncio.sleep(0.1)
-        await context.bot.send_message(chat_id=chat_id, text=section["text"])
+        await update.message.reply_text(section["text"])
 
-    # снова небольшая пауза перед отправкой меню
-    await asyncio.sleep(0.2)
-    await context.bot.send_message(chat_id=chat_id, text="Выберите раздел:", reply_markup=get_keyboard())
+# --- Запуск ---
+def main():
+    app = ApplicationBuilder().token(TOKEN).build()
 
-# Создаём приложение
-app = ApplicationBuilder().token(BOT_TOKEN).build()
-app.add_handler(CommandHandler("start", start))
-app.add_handler(CallbackQueryHandler(button))
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(MessageHandler(filters.Text("Выбрать раздел"), choose_section))
+    app.add_handler(MessageHandler(filters.Text("Купить планер"), buy))
+    app.add_handler(MessageHandler(filters.Text("Связаться с автором"), contact))
+    app.add_handler(MessageHandler(filters.Text("Помощь"), help_msg))
+    app.add_handler(MessageHandler(filters.Text("Назад"), back))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, show_section))
 
-# Запуск бота
-app.run_polling()
+    app.run_polling()
+
+if name == "__main__":
+    main()
