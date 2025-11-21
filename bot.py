@@ -1,89 +1,85 @@
-import os
 import json
-from dotenv import load_dotenv
-from telegram import Bot, ReplyKeyboardMarkup, KeyboardButton
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
+import logging
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes
 
-load_dotenv()
-TOKEN = os.getenv("BOT_TOKEN")
-if not TOKEN:
-    raise RuntimeError("BOT_TOKEN not set")
+# Логирование
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-# Загружаем контент
-with open("content.json", "r", encoding="utf-8") as f:
-    CONTENT = json.load(f)
+# Загружаем конфиг
+with open("config.json", "r", encoding="utf-8") as f:
+    CONFIG = json.load(f)
 
-SECTIONS = CONTENT["sections"]
-BUY_URL = CONTENT["buy_url"]
-CONTACT_URL = CONTENT["contact_url"]
-WELCOME_TEXT = CONTENT["welcome_text"]
+WELCOME_TEXT = CONFIG["welcome_text"]
+BUY_URL = CONFIG["buy_url"]
+CONTACT_URL = CONFIG["contact_url"]
+SECTIONS = CONFIG["sections"]
 
-# --- Клавиатуры ---
-def main_keyboard():
-    return ReplyKeyboardMarkup(
-        [
-            ["Выбрать раздел"],
-            ["Купить планер", "Связаться с автором"],
-            ["Помощь"]
-        ],
-        resize_keyboard=True
-    )
+# Генерируем кнопки разделов
+def get_sections_keyboard():
+    keyboard = []
+    for section in SECTIONS:
+        keyboard.append([InlineKeyboardButton(section["title"], callback_data=section["id"])])
+    return InlineKeyboardMarkup(keyboard)
 
-def sections_keyboard():
-    buttons = []
-    row = []
-    for i, sec in enumerate(SECTIONS, 1):
-        row.append(sec["title"])
-        if i % 2 == 0:
-            buttons.append(row)
-            row = []
-    if row:
-        buttons.append(row)
-    buttons.append(["Назад"])
-    return ReplyKeyboardMarkup(buttons, resize_keyboard=True)
+# Главное меню (кнопки "Купить" и "Связаться")
+def get_main_menu():
+    keyboard = [
+        [InlineKeyboardButton("Купить", url=BUY_URL)],
+        [InlineKeyboardButton("Связаться", url=CONTACT_URL)],
+        [InlineKeyboardButton("Выбрать раздел", callback_data="sections")]
+    ]
+    return InlineKeyboardMarkup(keyboard)
 
-# --- Хэндлеры ---
-def start(update, context):
-    update.message.reply_text(WELCOME_TEXT, reply_markup=main_keyboard())
+# Команда /start
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(WELCOME_TEXT, reply_markup=get_main_menu())
 
-def choose_section(update, context):
-    update.message.reply_text("Выберите раздел:", reply_markup=sections_keyboard())
+# Обработка кнопок
+async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
 
-def buy(update, context):
-    update.message.reply_text(BUY_URL)
+    section_id = query.data
 
-def contact(update, context):
-    update.message.reply_text(CONTACT_URL)
-
-def help_msg(update, context):
-    update.message.reply_text("Выберите раздел — и я покажу пример заполнения.")
-
-def back(update, context):
-    update.message.reply_text("Главное меню:", reply_markup=main_keyboard())
-
-def show_section(update, context):
-    text = update.message.text
-    section = next((s for s in SECTIONS if s["title"] == text), None)
-    if not section:
+    # Показать список разделов
+    if section_id == "sections":
+        await query.message.reply_text("Выберите раздел:", reply_markup=get_sections_keyboard())
         return
-    
-    # Если есть URL картинки, отправляем фото
-    if section.get("image"):
-        update.message.reply_photo(section["image"], caption=section["text"])
+
+    # Найти раздел
+    section = next((s for s in SECTIONS if s["id"] == section_id), None)
+
+    if not section:
+        await query.message.reply_text("Раздел не найден.")
+        return
+
+    image = section.get("image")
+    text = section.get("text", "")
+
+    # Отправляем фото + текст
+    if image:
+        await query.message.reply_photo(photo=image, caption=text)
     else:
-        update.message.reply_text(section["text"])
+        await query.message.reply_text(text)
 
-# --- Запуск ---
-updater = Updater(TOKEN, use_context=True)
-dp = updater.dispatcher
+    # После раздела — кнопка "Назад"
+    await query.message.reply_text("Выберите другой раздел:", reply_markup=get_sections_keyboard())
 
-dp.add_handler(CommandHandler("start", start))
-dp.add_handler(MessageHandler(Filters.text("Выбрать раздел"), choose_section))
-dp.add_handler(MessageHandler(Filters.text("Купить планер"), buy))
-dp.add_handler(MessageHandler(Filters.text("Связаться с автором"), contact))
-dp.add_handler(MessageHandler(Filters.text("Помощь"), help_msg))
-dp.add_handler(MessageHandler(Filters.text("Назад"), back))
-dp.add_handler(MessageHandler(Filters.text & ~Filters.command, show_section))
 
-updater.start_polling()
-updater.idle()
+async def main():
+    import os
+    TOKEN = os.getenv("BOT_TOKEN")  # Для Render
+
+    application = ApplicationBuilder().token(TOKEN).build()
+
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CallbackQueryHandler(button_handler))
+
+    print("Bot started...")
+    await application.run_polling()
+
+if __name__ == "__main__":
+    import asyncio
+    asyncio.run(main())
