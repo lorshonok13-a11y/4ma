@@ -34,13 +34,17 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             media = [InputMediaPhoto(url) for url in images]
             media[0].caption = section["text"]  # текст на первой картинке
             await query.message.reply_media_group(media)
+            
+            # Отдельное сообщение с кнопками
+            await query.message.reply_text(
+                "Выберите раздел:",
+                reply_markup=get_keyboard()
+            )
         elif section.get("image"):
             await query.message.reply_photo(section["image"], caption=section["text"])
+            await query.message.reply_text("Выберите раздел:", reply_markup=get_keyboard())
         else:
-            await query.message.reply_text(section["text"])
-        
-        # После показа раздела заново выводим кнопки
-        await query.message.reply_text("Выберите раздел:", reply_markup=get_keyboard())
+            await query.message.reply_text(section["text"], reply_markup=get_keyboard())
 
 # Создаём приложение
 app = ApplicationBuilder().token(BOT_TOKEN).build()
