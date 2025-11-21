@@ -22,16 +22,8 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     section_id = query.data
     section = next((s for s in CONTENT["sections"] if s["id"] == section_id), None)
-    
     if section:
-        # Если есть несколько картинок
-        if section.get("images"):
-            for img_url in section["images"]:
-                await query.message.reply_photo(img_url)
-            # текст после всех фото
-            await query.message.reply_text(section["text"])
-        # Если одно фото
-        elif section.get("image"):
+        if section.get("image"):
             await query.message.reply_photo(section["image"], caption=section["text"])
         else:
             await query.message.reply_text(section["text"])
