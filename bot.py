@@ -23,28 +23,28 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    
+
     section_id = query.data
     section = next((s for s in CONTENT["sections"] if s["id"] == section_id), None)
-    
-    if section:
-        images = section.get("images")
-        if images:
-            # Отправляем альбом
-            media = [InputMediaPhoto(url) for url in images]
-            media[0].caption = section["text"]  # текст на первой картинке
-            await query.message.reply_media_group(media)
-            
-            # Отдельное сообщение с кнопками
-            await query.message.reply_text(
-                "Выберите раздел:",
-                reply_markup=get_keyboard()
-            )
-        elif section.get("image"):
-            await query.message.reply_photo(section["image"], caption=section["text"])
-            await query.message.reply_text("Выберите раздел:", reply_markup=get_keyboard())
-        else:
-            await query.message.reply_text(section["text"], reply_markup=get_keyboard())
+
+    if not section:
+        return
+
+    images = section.get("images")
+    if images:
+        # Создаём альбом
+        media = [InputMediaPhoto(url) for url in images]
+        media[0].caption = section["text"]
+
+        # Отправляем альбом через context.bot.send_media_group
+        await context.bot.send_media_group(chat_id=query.message.chat_id, media=media)
+    elif section.get("image"):
+        await query.message.reply_photo(section["image"], caption=section["text"])
+    else:
+        await query.message.reply_text(section["text"])
+
+    # Отдельное сообщение с кнопками после раздела
+    await query.message.reply_text("Выберите раздел:", reply_markup=get_keyboard())
 
 # Создаём приложение
 app = ApplicationBuilder().token(BOT_TOKEN).build()
