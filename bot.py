@@ -22,7 +22,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     section_id = query.data
     section = next((s for s in CONTENT["sections"] if s["id"] == section_id), None)
-    
+
     if section:
         # Если есть несколько картинок
         if section.get("images"):
@@ -30,7 +30,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await query.message.reply_photo(img_url)
             # текст после всех фото
             await query.message.reply_text(section["text"])
-        # Если одно фото
+        # Если одна картинка
         elif section.get("image"):
             await query.message.reply_photo(section["image"], caption=section["text"])
         else:
